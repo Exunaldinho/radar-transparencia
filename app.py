@@ -9,6 +9,7 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
+import leitor
 import radar
 
 st.set_page_config(page_title="Radar da Transparência", page_icon="🔎", layout="wide")
@@ -46,11 +47,14 @@ with st.sidebar:
     cnpjs_extra = st.text_area("CNPJs de órgãos municipais (opcional)",
                                help="Um por linha: prefeitura, fundos de saúde, educação etc. "
                                     "O radar também tenta descobrir sozinho.")
-    arq_contratos = st.file_uploader("Planilha de despesas/contratos (opcional)", type=["csv", "xlsx", "xls"],
-                                     help="Baixada do portal da prefeitura ou do TCE-MA.")
+    arq_contratos = st.file_uploader("Planilha ou relatório de despesas/contratos (opcional)",
+                                     type=["csv", "xlsx", "xls", "pdf"],
+                                     help="CSV, Excel ou PDF baixado do portal da prefeitura ou do TCE-MA. "
+                                          "Não é preciso enviar a lista de contratos do portal: o radar já lê sozinho.")
     arq_agentes = st.file_uploader("Lista de servidores/agentes (opcional)", type=["csv"],
                                    help="Colunas: nome;cargo")
     rodar = st.button("🔎 Rodar radar", type="primary", width="stretch")
+    st.caption("Enquanto o radar roda, não mexa nos campos: qualquer mudança reinicia a análise.")
 
 # --------------------------------------------------------------------------
 # CABEÇALHO
@@ -84,11 +88,18 @@ if rodar:
     cfg = {
         "municipio": municipio, "uf": uf, "codigo_ibge": ibge, "anos": sorted(anos),
         "cnpjs_orgaos_extra": [c for c in cnpjs_extra.split() if radar.so_digitos(c)],
-        "arquivo_contratos_csv": salvar_upload(arq_contratos, pasta),
+        "arquivo_contratos_csv": None,
         "arquivo_agentes_csv": salvar_upload(arq_agentes, pasta),
         "usar_portal": usar_portal, "portal_prefeitura": portal.strip(),
         "usar_pncp": usar_pncp, "usar_tse": usar_tse, "pasta_saida": pasta,
     }
+    if arq_contratos:
+        try:
+            cfg["arquivo_contratos_csv"], resumo = leitor.normalizar(salvar_upload(arq_contratos, pasta), pasta)
+            st.success(resumo)
+        except Exception as e:
+            st.error(f"Não consegui ler {arq_contratos.name}: {e}")
+            st.stop()
     with st.status("Coletando e cruzando dados…", expanded=True) as status:
         linhas = []
         caixa = st.empty()
